@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>System Dashboard</title>
+<!-- Load Tailwind CSS v3 with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            bg: '#000000',
+                            primary: '#00ffff', // Cyan
+                            dim: 'rgba(0, 255, 255, 0.1)',
+                            border: 'rgba(0, 255, 255, 0.3)',
+                            text: '#e0e0e0'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['"Courier New"', 'Courier', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+<!-- Custom CSS for specific effects not easily handled by utility classes alone -->
+<style data-purpose="cyberpunk-effects">
+        body {
+            background-color: #000000;
+            color: #e0e0e0;
+            font-family: 'Courier New', Courier, monospace; /* Fallback */
+            overflow: hidden; /* Prevent body scroll, handle internally */
+        }
+
+        /* Text Glow Effect */
+        .text-glow {
+            text-shadow: 0 0 5px rgba(0, 255, 255, 0.5), 0 0 10px rgba(0, 255, 255, 0.3);
+        }
+
+        /* Box Glow/Border Effect */
+        .box-glow {
+            box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.05);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a1420; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #00ffff; 
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ffffff; 
+        }
+
+        /* CRT Scanline Effect (Optional but adds to the vibe) */
+        .scanlines {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.3;
+        }
+
+        /* High contrast theme toggle */
+        body.high-contrast {
+            background-color: #000000;
+            color: #ffffff;
+        }
+        body.high-contrast .scanlines {
+            opacity: 0.1;
+        }
+        body.high-contrast .box-glow {
+            box-shadow: inset 0 0 0 rgba(0, 255, 255, 0.0), 0 0 12px rgba(0, 255, 255, 0.8);
+        }
+        body.high-contrast .border-cyber-border {
+            border-color: rgba(0, 255, 255, 0.8);
+        }
+
+        /* Toggle switches for settings */
+        .toggle-switch {
+            position: relative;
+            width: 42px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .toggle-switch .toggle-input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-switch .toggle-track {
+            width: 100%;
+            height: 100%;
+            background: rgba(148, 163, 184, 0.35);
+            border-radius: 9999px;
+            border: 1px solid rgba(0, 255, 255, 0.25);
+            box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.8);
+            transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .toggle-switch .toggle-thumb {
+            position: absolute;
+            left: 2px;
+            top: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 9999px;
+            background: #64748b;
+            box-shadow: 0 0 6px rgba(15, 23, 42, 0.8);
+            transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+        }
+        .toggle-switch .toggle-input:checked + .toggle-track {
+            background: rgba(0, 255, 255, 0.25);
+            border-color: rgba(0, 255, 255, 0.85);
+            box-shadow: 0 0 10px rgba(34, 211, 238, 0.7);
+        }
+        .toggle-switch .toggle-input:checked + .toggle-track + .toggle-thumb {
+            transform: translateX(18px);
+            background: #00ffff;
+            box-shadow: 0 0 10px rgba(34, 211, 238, 0.9);
+        }
+        .toggle-switch .toggle-input:focus-visible + .toggle-track {
+            outline: 2px solid rgba(255, 255, 255, 0.8);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col font-mono text-xs selection:bg-cyber-primary selection:text-black overflow-hidden">
+<!-- CRT Overlay -->
+<div class="scanlines"></div>
+<!-- BEGIN: MainContainer -->
+<main class="flex-1 flex flex-col p-2 gap-2 min-h-0 relative z-10 overflow-hidden">
+<!-- BEGIN: UpperSection -->
+<!-- This section holds the System Stats, Terminal, and Network Info -->
+<section class="flex-[3] grid grid-cols-1 md:grid-cols-12 gap-2 min-h-0" data-purpose="upper-dashboard">
+<!-- BEGIN: LeftColumn (System Stats) -->
+<aside class="hidden md:flex md:col-span-3 flex-col gap-2 border border-cyber-border bg-cyber-dim/20 p-2 rounded-sm box-glow min-h-0 overflow-hidden">
+<!-- Clock Module -->
+<div class="mb-4 text-center border-b border-cyber-border pb-2">
+<h2 class="text-cyber-primary text-[0.6rem] tracking-widest uppercase mb-1">System Time</h2>
+<div id="system-time" class="text-4xl text-white text-glow font-bold">16:39:42</div>
+<div class="text-cyber-primary text-xs mt-1">UTC +00:00</div>
+</div>
+<!-- CPU Usage Module -->
+<div class="flex-1 flex flex-col min-h-0">
+<h3 class="text-cyber-primary text-xs mb-1">CPU USAGE</h3>
+<div class="flex-1 border border-cyber-border bg-black/40 p-1 relative overflow-hidden">
+<!-- Simulated Chart 1 -->
+<svg class="absolute bottom-0 left-0 w-full h-1/2" preserveaspectratio="none" viewBox="0 0 100 100">
+<polyline id="cpu-poly-1" fill="none" points="0,100 100,100" stroke="#00ffff" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<!-- Simulated Chart 2 -->
+<svg class="absolute bottom-0 left-0 w-full h-full opacity-50" preserveaspectratio="none" viewBox="0 0 100 100">
+<polyline id="cpu-poly-2" fill="none" points="0,100 100,100" stroke="#ffffff" stroke-width="1" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div class="absolute top-1 right-1 text-cyber-primary text-[10px]">CORE_01: 34%</div>
+<div class="absolute top-4 right-1 text-white text-[10px] opacity-70">CORE_02: 12%</div>
+</div>
+</div>
+<!-- Memory Module -->
+<div class="mt-2">
+<h3 class="text-cyber-primary text-xs mb-1 flex justify-between">
+<span>MEMORY</span>
+<span>4.2GB / 16GB</span>
+</h3>
+<!-- Visual Grid of Dots -->
+<div class="grid grid-cols-10 gap-1 p-1 border border-cyber-border bg-black/40" data-purpose="memory-grid"><!-- 50 Grid Bits -->
+<div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div>
+<div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div>
+<div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div>
+<div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div>
+<div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-cyber-primary shadow-[0_0_2px_#00ffff]"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div><div class="h-1 w-1 bg-gray-700/50"></div></div>
+</div>
+<!-- Top Processes List -->
+<div class="flex-1 mt-2 flex flex-col min-h-0 overflow-hidden">
+<h3 class="text-cyber-primary text-xs mb-1">TOP PROCESSES</h3>
+<div class="flex-1 overflow-y-auto border border-cyber-border bg-black/40 text-[10px]">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="text-cyber-primary border-b border-cyber-border/50">
+<th class="p-1 font-normal">PID</th>
+<th class="p-1 font-normal">NAME</th>
+<th class="p-1 font-normal">CPU</th>
+<th class="p-1 font-normal">MEM</th>
+</tr>
+</thead>
+<tbody class="text-gray-400">
+<tr class="hover:bg-cyber-primary/10 hover:text-white">
+<td class="p-1">1024</td>
+<td class="p-1">electron</td>
+<td class="p-1 text-cyber-primary">12%</td>
+<td class="p-1">400M</td>
+</tr>
+<tr class="hover:bg-cyber-primary/10 hover:text-white">
+<td class="p-1">892</td>
+<td class="p-1">Discord</td>
+<td class="p-1 text-cyber-primary">4%</td>
+<td class="p-1">250M</td>
+</tr>
+<tr class="hover:bg-cyber-primary/10 hover:text-white">
+<td class="p-1">45</td>
+<td class="p-1">Xorg</td>
+<td class="p-1 text-cyber-primary">2%</td>
+<td class="p-1">120M</td>
+</tr>
+<tr class="hover:bg-cyber-primary/10 hover:text-white">
+<td class="p-1">11</td>
+<td class="p-1">bash</td>
+<td class="p-1 text-cyber-primary">0.1%</td>
+<td class="p-1">4M</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+</aside>
+<!-- END: LeftColumn -->
+<!-- BEGIN: CenterColumn (Terminal) -->
+<section class="col-span-1 md:col-span-6 flex flex-col border border-cyber-border bg-black/60 rounded-sm relative overflow-hidden box-glow min-h-0">
+<!-- Terminal Header -->
+<div class="flex items-center bg-cyber-dim/30 border-b border-cyber-border px-2 h-8">
+<div class="flex space-x-1 mr-4">
+<div class="w-2 h-2 rounded-full bg-red-500"></div>
+<div class="w-2 h-2 rounded-full bg-yellow-500"></div>
+<div class="w-2 h-2 rounded-full bg-green-500"></div>
+</div>
+<div class="px-3 py-1 bg-cyber-primary/20 text-cyber-primary text-[10px] border-t border-l border-r border-cyber-border/50 rounded-t-sm">
+                        user@squared:~ (neofetch)
+                    </div>
+</div>
+<!-- Terminal Content -->
+<div class="flex-1 p-4 overflow-y-auto font-mono text-sm leading-tight text-gray-300">
+
+<!-- Neofetch Output (dynamic) -->
+<div id="terminal-system-info" class="flex gap-6 mb-4 items-start"></div>
+
+<!-- Command Output Log -->
+<div id="terminal-log" class="mb-2 text-xs space-y-0.5"></div>
+
+<!-- Prompt -->
+<div class="flex items-center">
+<span class="text-[#00ff00]">user@squared</span>
+<span class="text-white">:</span>
+<span class="text-[#44aaff]">~/projects/eDEX-UI</span>
+<span class="text-white">$</span>
+<span id="terminal-input" class="ml-2 whitespace-pre text-gray-100"></span>
+<span class="w-2 h-4 bg-white ml-1 animate-pulse"></span>
+</div>
+</div>
+</section>
+<!-- END: CenterColumn -->
+<!-- BEGIN: RightColumn (Network) -->
+<aside class="col-span-1 md:col-span-3 flex flex-col gap-2 border border-cyber-border bg-cyber-dim/20 p-2 rounded-sm box-glow min-h-0 overflow-hidden">
+<!-- Network Status -->
+<div class="mb-2">
+<h3 class="text-cyber-primary text-xs mb-1 border-b border-cyber-border/50 pb-1">NETWORK STATUS</h3>
+<div class="flex justify-between items-center mb-1">
+<span class="text-gray-400">State</span>
+<span class="text-green-400 font-bold text-glow">ONLINE</span>
+</div>
+<div class="flex justify-between items-center mb-1">
+<span class="text-gray-400">IPv4</span>
+<span class="text-cyber-primary">192.168.1.42</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-gray-400">Ping</span>
+<span id="network-ping" class="text-cyber-primary">14ms</span>
+</div>
+</div>
+<!-- World View Image -->
+<div class="flex-1 flex flex-col items-center justify-center border border-cyber-border/30 bg-black p-2 overflow-hidden relative">
+<!-- Overlay Grid -->
+<div class="absolute inset-0 bg-[linear-gradient(rgba(0,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+<img alt="World View" class="w-full h-auto object-contain max-h-[150px] opacity-80 mix-blend-screen drop-shadow-[0_0_10px_rgba(0,255,255,0.5)]" src="/original-c963cc88d646cd2dc987eb4302be4f95.gif"/>
+<div class="absolute bottom-1 right-1 text-[8px] text-cyber-primary">LAT: 34.0522 N / LON: 118.2437 W</div>
+</div>
+<!-- Network Traffic Chart -->
+<div class="h-1/3 flex flex-col mt-2">
+<h3 class="text-cyber-primary text-xs mb-1">NETWORK TRAFFIC</h3>
+<div class="flex-1 border border-cyber-border bg-black/40 relative overflow-hidden">
+<!-- Up Traffic -->
+<svg class="absolute bottom-0 left-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 200 100">
+<path id="net-up-fill" d="M0,100 L0,80 L200,80 L200,100 Z" fill="rgba(0, 255, 255, 0.1)" stroke="none"></path>
+<polyline id="net-up-poly" fill="none" points="0,80 200,80" stroke="#00ffff" stroke-width="1.5"></polyline>
+</svg>
+<!-- Down Traffic -->
+<svg class="absolute bottom-0 left-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 200 100">
+<polyline id="net-down-poly" fill="none" points="0,90 200,90" stroke="#ff00ff" stroke-width="1.5" style="opacity: 0.7"></polyline>
+</svg>
+<div class="absolute top-1 left-1 text-[9px] text-cyan-300">UP: 450 KB/s</div>
+<div class="absolute top-4 left-1 text-[9px] text-pink-400">DOWN: 2.1 MB/s</div>
+</div>
+</div>
+</aside>
+<!-- END: RightColumn -->
+</section>
+<!-- END: UpperSection -->
+<!-- BEGIN: LowerSection -->
+<section class="flex-[1] grid grid-cols-1 gap-2 min-h-0" data-purpose="lower-dashboard">
+<!-- BEGIN: FileSystem -->
+<div class="border border-cyber-border bg-cyber-dim/10 rounded-sm p-2 flex flex-col box-glow min-h-0 overflow-hidden">
+<div class="flex-1 overflow-y-auto p-2">
+<div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-4">
+<!-- New Files -->
+<div id="cameras-app-trigger" class="flex flex-col items-center group cursor-pointer">
+    <img alt="App" class="w-12 h-12 mb-1 opacity-70 group-hover:opacity-100 transition-all mix-blend-screen" src="camera_icon.png"/>
+    <span class="text-[10px] text-cyber-primary group-hover:text-white text-center">Cameras</span>
+</div>
+<div id="movies-app-trigger" class="flex flex-col items-center group cursor-pointer">
+<img alt="App" class="w-12 h-12 mb-1 opacity-70 group-hover:opacity-100 transition-all mix-blend-screen" src="folder_icon.png"/>
+<span class="text-[10px] text-cyber-primary group-hover:text-white text-center">Hacked Movies</span>
+</div>
+<div id="ids-app-trigger" class="flex flex-col items-center group cursor-pointer">
+    <img alt="App" class="w-12 h-12 mb-1 opacity-70 group-hover:opacity-100 transition-all mix-blend-screen" src="folder_icon.png"/>
+    <span class="text-[10px] text-cyber-primary group-hover:text-white text-center">IDS</span>
+</div>
+<div id="walkie-app-trigger" class="flex flex-col items-center group cursor-pointer">
+    <img alt="App" class="w-12 h-12 mb-1 opacity-70 group-hover:opacity-100 transition-all mix-blend-screen" src="folder_icon.png"/>
+    <span class="text-[10px] text-cyber-primary group-hover:text-white text-center">Walkie Scanner</span>
+</div>
+<div id="settings-app-trigger" class="flex flex-col items-center group cursor-pointer">
+    <img alt="App" class="w-12 h-12 mb-1 opacity-70 group-hover:opacity-100 transition-all mix-blend-screen" src="folder_icon.png"/>
+    <span class="text-[10px] text-cyber-primary group-hover:text-white text-center">Settings</span>
+</div>
+<div id="secret-folder-trigger" class="flex flex-col items-center group cursor-pointer">
+<img alt="File" class="w-12 h-12 mb-1 opacity-70 group-hover:opacity-100 transition-all mix-blend-screen shadow-red-500/20" src="https://lh3.googleusercontent.com/aida-public/AB6AXuApp6phW8cX51eyI7pLXpuSglpqKXZyakxQShTdlqpKRwmS6CW56GJ--nkJcPS7HAplPY5Isfzi6pFC4854YXMfZP5K2waVx95MrgSB2D11W6QucT1BqBQHh5CFd8M0Ewv-K_wSaph2onadMPvZE9N-XMOfYg7U324CoG23sYsHw0wOjQOxFKHR69b3xUOQZtvLzWmGTG5x8IuG1lNr62VxY5K6Fkw-lFW7NytGEW9i_7fqZnPBQxSzQobMUqf0B6TM1YT3rny7PP8"/>
+<span class="text-[10px] text-red-400 group-hover:text-white text-center">Secret Government Files</span>
+</div>
+</div>
+</div>
+<!-- Filesystem Footer -->
+<div class="border-t border-cyber-border pt-1 mt-1 flex justify-between items-center text-[10px]">
+<span class="text-cyber-primary">Mount /home/squared</span>
+<span class="text-gray-400">used 46%</span>
+</div>
+</div>
+<!-- END: FileSystem -->
+</section>
+<!-- END: LowerSection -->
+</main>
+<!-- SECRET WINDOW MODAL -->
+<div id="secret-window" class="fixed inset-4 md:inset-20 z-[100] bg-black/95 border border-cyber-primary hidden flex-col box-glow shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+    <!-- Window Header -->
+    <div id="secret-window-header" class="bg-cyber-dim/80 border-b border-cyber-border px-4 h-10 flex items-center justify-between cursor-move select-none">
+        <div class="flex space-x-2 pointer-events-auto">
+            <button id="close-window" class="w-3 h-3 rounded-full bg-red-500 hover:brightness-125 transition-all"></button>
+            <button id="minimize-window" class="w-3 h-3 rounded-full bg-yellow-500 hover:brightness-125 transition-all"></button>
+            <button id="fullscreen-window" class="w-3 h-3 rounded-full bg-green-500 hover:brightness-125 transition-all"></button>
+        </div>
+        <div class="flex items-center space-x-4">
+            <div class="text-cyber-primary font-bold text-[10px] tracking-[0.2em] uppercase">CLASSIFIED // NODE_SECRET</div>
+            <div id="secret-breadcrumb" class="text-[9px] text-cyber-primary/60 font-mono hidden md:block">/root</div>
+        </div>
+        <div class="w-12"></div> <!-- Balance spacer -->
+    </div>
+    <!-- Window Body -->
+    <div class="flex-1 flex flex-col overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
+        <!-- Navigation Bar -->
+        <div class="h-8 border-b border-cyber-border/30 bg-black/40 flex items-center px-4 space-x-4">
+            <button id="secret-back-btn" class="text-cyber-primary text-[10px] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                &lt; BACK
+            </button>
+            <div id="secret-path-display" class="text-[10px] text-gray-500 font-mono italic">/classified/nsc_records</div>
+        </div>
+        <div id="secret-window-content" class="flex-1 p-8 overflow-y-auto grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-8 content-start">
+            <!-- Dynamic Content Injected Here -->
+        </div>
+    </div>
+    <!-- Window Status Bar -->
+    <div class="h-6 bg-cyber-dim/20 border-t border-cyber-border/30 flex items-center px-3 text-[9px] text-gray-500 italic">
+        Viewing restricted archive: /mnt/vault/classified/nsc_records
+    </div>
+</div>
+
+<!-- PDF VIEWER WINDOW -->
+<div id="pdf-viewer-window" class="fixed inset-8 md:inset-16 z-[110] bg-black/95 border border-cyber-primary hidden flex-col box-glow shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+    <!-- Window Header -->
+    <div id="pdf-window-header" class="bg-cyber-dim/80 border-b border-cyber-border px-4 h-10 flex items-center justify-between cursor-move select-none">
+        <div class="flex space-x-2">
+            <button id="close-pdf-window" class="w-3 h-3 rounded-full bg-red-500 hover:brightness-125 transition-all"></button>
+            <button id="minimize-pdf-window" class="w-3 h-3 rounded-full bg-yellow-500 hover:brightness-125 transition-all"></button>
+            <button id="fullscreen-pdf-window" class="w-3 h-3 rounded-full bg-green-500 hover:brightness-125 transition-all"></button>
+        </div>
+        <div class="text-cyber-primary font-bold text-[10px] tracking-[0.2em] uppercase">SECURE_READER // EC-121.PDF</div>
+        <div class="w-12"></div>
+    </div>
+    <!-- Window Body -->
+    <div class="flex-1 bg-white relative">
+        <!-- Loader shim for loading effect -->
+        <div id="pdf-loader" class="absolute inset-0 bg-black flex flex-col items-center justify-center z-10">
+            <div class="w-12 h-12 border-2 border-cyber-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+            <div class="text-cyber-primary animate-pulse uppercase tracking-widest text-[10px]">Decrypting Resource...</div>
+        </div>
+        <iframe id="pdf-iframe" src="about:blank" class="w-full h-full border-none"></iframe>
+    </div>
+    <!-- Status Bar -->
+    <div class="h-6 bg-cyber-dim/20 border-t border-cyber-border/30 flex items-center px-3 text-[9px] text-gray-500 font-mono">
+        STATUS: SECURE_LINK_ACTIVE // ENCRYPTION: AES-256
+    </div>
+</div>
+
+<!-- MOVIES APP WINDOW -->
+<div id="movies-window" class="fixed inset-4 md:inset-10 z-[115] bg-black/95 border border-cyber-primary hidden flex-col box-glow shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+    <div id="movies-window-header" class="bg-cyber-dim/80 border-b border-cyber-border px-4 h-10 flex items-center justify-between cursor-move select-none">
+        <div class="flex space-x-2">
+            <button id="close-movies-window" class="w-3 h-3 rounded-full bg-red-500 hover:brightness-125 transition-all"></button>
+            <button id="minimize-movies-window" class="w-3 h-3 rounded-full bg-yellow-500 hover:brightness-125 transition-all"></button>
+            <button id="fullscreen-movies-window" class="w-3 h-3 rounded-full bg-green-500 hover:brightness-125 transition-all"></button>
+        </div>
+        <div class="text-cyber-primary font-bold text-[10px] tracking-[0.2em] uppercase">HACKED MOVIES // VIDLO</div>
+        <div class="w-12"></div>
+    </div>
+    <div class="flex-1 bg-black relative">
+        <iframe id="movies-iframe" src="about:blank" class="w-full h-full border-none"></iframe>
+    </div>
+    <div class="h-6 bg-cyber-dim/20 border-t border-cyber-border/30 flex items-center px-3 text-[9px] text-cyber-primary/60 font-mono">
+        SOURCE: https://vidlo-idk.pages.dev/ // MODE: SANDBOX_IFRAME
+    </div>
+</div>
+
+<!-- CAMERAS APP WINDOW -->
+<div id="ids-window" class="fixed inset-4 md:inset-10 z-[116] bg-black/95 border border-cyber-primary hidden flex-col box-glow shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+    <div id="ids-window-header" class="bg-cyber-dim/80 border-b border-cyber-border px-4 h-10 flex items-center justify-between cursor-move select-none">
+        <div class="flex space-x-2">
+            <button id="close-ids-window" class="w-3 h-3 rounded-full bg-red-500 hover:brightness-125 transition-all"></button>
+            <button id="minimize-ids-window" class="w-3 h-3 rounded-full bg-yellow-500 hover:brightness-125 transition-all"></button>
+            <button id="fullscreen-ids-window" class="w-3 h-3 rounded-full bg-green-500 hover:brightness-125 transition-all"></button>
+        </div>
+        <div class="flex flex-col items-start">
+            <div class="text-cyber-primary font-bold text-[10px] tracking-[0.2em] uppercase">
+                IDS // INTRUSION DETECTION
+            </div>
+        </div>
+        <div class="w-12"></div>
+    </div>
+    <div class="flex-1 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] p-6 overflow-y-auto">
+        <div id="ids-window-content" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6"></div>
+    </div>
+    <div class="h-6 bg-cyber-dim/20 border-t border-cyber-border/30 flex items-center px-3 text-[9px] text-cyber-primary/60 font-mono">
+        IDS: PHOTO ARCHIVE // SOURCE: /root/epstein/photos
+    </div>
+</div>
+
+<!-- SETTINGS APP WINDOW -->
+<div id="settings-window" class="fixed inset-4 md:inset-10 z-[116] bg-black/95 border border-cyber-primary hidden flex-col box-glow shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+    <div id="settings-window-header" class="bg-cyber-dim/80 border-b border-cyber-border px-4 h-10 flex items-center justify-between cursor-move select-none">
+        <div class="flex space-x-2">
+            <button id="close-settings-window" class="w-3 h-3 rounded-full bg-red-500 hover:brightness-125 transition-all"></button>
+            <button id="minimize-settings-window" class="w-3 h-3 rounded-full bg-yellow-500 hover:brightness-125 transition-all"></button>
+            <button id="fullscreen-settings-window" class="w-3 h-3 rounded-full bg-green-500 hover:brightness-125 transition-all"></button>
+        </div>
+        <div class="text-cyber-primary font-bold text-[10px] tracking-[0.2em] uppercase">
+            SYSTEM // SETTINGS
+        </div>
+        <div class="w-12"></div>
+    </div>
+    <div class="flex-1 bg-black flex flex-col md:flex-row text-[11px]">
+        <!-- Left panel: categories -->
+        <div class="w-full md:w-40 border-b md:border-b-0 md:border-r border-cyber-border/30 bg-black/70 p-3 space-y-2">
+            <div class="text-cyber-primary text-[10px] uppercase tracking-wide mb-1">Categories</div>
+            <div class="space-y-1">
+                <button id="settings-cat-language" class="w-full text-left px-2 py-1 bg-cyber-primary/20 text-cyber-primary rounded border border-cyber-border/80">
+                    Language &amp; Region
+                </button>
+                <button id="settings-cat-display" class="w-full text-left px-2 py-1 bg-black/60 text-gray-400 rounded border border-cyber-border/40">
+                    Display &amp; Theme
+                </button>
+                <button id="settings-cat-security" class="w-full text-left px-2 py-1 bg-black/60 text-gray-400 rounded border border-cyber-border/40">
+                    Security &amp; Privacy
+                </button>
+            </div>
+        </div>
+
+        <!-- Right panel: content -->
+        <div class="flex-1 p-4 overflow-y-auto">
+            <!-- Language & Region -->
+            <div id="settings-section-language" class="space-y-4">
+                <div>
+                    <div class="text-cyber-primary text-[11px] uppercase tracking-[0.2em] mb-1">
+                        Language &amp; Region
+                    </div>
+                    <div class="border border-cyber-border/40 bg-black/70 p-3 rounded-sm space-y-3">
+                        <div class="flex flex-col gap-1">
+                            <label for="language-select" class="text-gray-300 text-[11px]">
+                                Interface language
+                            </label>
+                            <select
+                                id="language-select"
+                                class="bg-black/80 border border-cyber-border text-white px-2 py-1.5 rounded text-[11px] outline-none"
+                            >
+                                <option value="en">English</option>
+                                <option value="es">Español (Spanish)</option>
+                            </select>
+                        </div>
+                        <div class="text-gray-400 text-[11px]" id="language-status-label">
+                            Current language: English
+                        </div>
+                        <div class="mt-2 border-t border-cyber-border/40 pt-2 text-xs text-cyber-primary" id="language-preview">
+                            System messages will appear in English.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Display & Theme -->
+            <div id="settings-section-display" class="space-y-4 hidden">
+                <div>
+                    <div class="text-cyber-primary text-[11px] uppercase tracking-[0.2em] mb-1">
+                        Display &amp; Theme
+                    </div>
+                    <div class="border border-cyber-border/40 bg-black/70 p-3 rounded-sm space-y-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex flex-col">
+                                <span class="text-gray-300 text-[11px]">Enable sound effects</span>
+                                <span class="text-gray-500 text-[10px]">Play subtle UI beeps and clicks.</span>
+                            </div>
+                            <label class="toggle-switch">
+                                <input id="setting-sound" type="checkbox" class="toggle-input" />
+                                <span class="toggle-track"></span>
+                                <span class="toggle-thumb"></span>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex flex-col">
+                                <span class="text-gray-300 text-[11px]">High contrast theme</span>
+                                <span class="text-gray-500 text-[10px]">Increase glow and border intensity for readability.</span>
+                            </div>
+                            <label class="toggle-switch">
+                                <input id="setting-high-contrast" type="checkbox" class="toggle-input" />
+                                <span class="toggle-track"></span>
+                                <span class="toggle-thumb"></span>
+                            </label>
+                        </div>
+                        <p class="text-gray-500 text-[10px] border-t border-cyber-border/40 pt-2 mt-1">
+                            Display settings apply immediately to this session.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security & Privacy -->
+            <div id="settings-section-security" class="space-y-4 hidden">
+                <div>
+                    <div class="text-cyber-primary text-[11px] uppercase tracking-[0.2em] mb-1">
+                        Security &amp; Privacy
+                    </div>
+                    <div class="border border-cyber-border/40 bg-black/70 p-3 rounded-sm space-y-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex flex-col">
+                                <span class="text-gray-300 text-[11px]">Show advanced warnings</span>
+                                <span class="text-gray-500 text-[10px]">Toggle detailed security messages on verification.</span>
+                            </div>
+                            <label class="toggle-switch">
+                                <input id="setting-advanced-warnings" type="checkbox" class="toggle-input" />
+                                <span class="toggle-track"></span>
+                                <span class="toggle-thumb"></span>
+                            </label>
+                        </div>
+                        <p class="text-gray-500 text-[10px]">
+                            When disabled, facial verification warnings will be shorter and less detailed.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="h-6 bg-cyber-dim/20 border-t border-cyber-border/30 flex items-center px-3 text-[9px] text-cyber-primary/60 font-mono">
+        SETTINGS: CHANGES APPLY IMMEDIATELY // PROFILE: LOCAL_SESSION
+    </div>
+</div>
+
+<div id="walkie-window" class="fixed inset-6 md:inset-12 z-[117] bg-black/95 border border-cyber-primary hidden flex-col box-glow shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+    <div id="walkie-window-header" class="bg-cyber-dim/80 border-b border-cyber-border px-4 h-10 flex items-center justify-between cursor-move select-none">
+        <div class="flex space-x-2">
+            <button id="close-walkie-window" class="w-3 h-3 rounded-full bg-red-500 hover:brightness-125 transition-all"></button>
+            <button id="minimize-walkie-window" class="w-3 h-3 rounded-full bg-yellow-500 hover:brightness-125 transition-all"></button>
+            <button id="fullscreen-walkie-window" class="w-3 h-3 rounded-full bg-green-500 hover:brightness-125 transition-all"></button>
+        </div>
+        <div class="text-cyber-primary font-bold text-[10px] tracking-[0.2em] uppercase">WALKIE // SCANNER</div>
+        <div class="w-12"></div>
+    </div>
+
+    <!-- New layout: left visualizer, right channel list (like cameras app) -->
+    <div class="flex-1 bg-black relative flex flex-col md:flex-row">
+        <!-- Visualizer Left -->
+        <div class="flex-1 flex items-center justify-center p-2">
+            <div class="w-full h-full flex items-center justify-center">
+                <canvas id="walkie-viz-canvas" class="w-full h-48 md:h-full max-h-72 bg-black/20 border border-cyber-border/20"></canvas>
+            </div>
+        </div>
+
+        <!-- Channel list Right -->
+        <div class="w-full md:w-48 border-t md:border-t-0 md:border-l border-cyber-border/30 bg-black/60 p-2 flex flex-col text-[10px]">
+            <div class="text-cyber-primary mb-1">CHANNELS</div>
+            <div class="flex-1 flex flex-col gap-1 overflow-y-auto">
+                <button data-src="citywide1_20250109_200000.mp3" class="walkie-channel-btn flex items-center justify-between py-2 px-2 border-b border-cyber-border/20 text-left hover:bg-cyber-primary/5 rounded">
+                    <span>Citywide 1</span>
+                </button>
+                <button data-src="MULTI-summary-20061101200112.mp3" class="walkie-channel-btn flex items-center justify-between py-2 px-2 border-b border-cyber-border/20 text-left hover:bg-cyber-primary/5 rounded">
+                    <span>Police Radio 1</span>
+                </button>
+                <button data-src="MULTI-summary-20070501200537.mp3" class="walkie-channel-btn flex items-center justify-between py-2 px-2 border-b border-cyber-border/20 text-left hover:bg-cyber-primary/5 rounded">
+                    <span>Police Radio 2</span>
+                </button>
+                <button data-src="MULTI-summary-20070501150647.mp3" class="walkie-channel-btn flex items-center justify-between py-2 px-2 border-b border-cyber-border/20 text-left hover:bg-cyber-primary/5 rounded">
+                    <span>Police Radio 3</span>
+                </button>
+                <button data-src="MULTI-summary-20070501060419.mp3" class="walkie-channel-btn flex items-center justify-between py-2 px-2 border-b border-cyber-border/20 text-left hover:bg-cyber-primary/5 rounded">
+                    <span>Police Radio 4</span>
+                </button>
+                <button data-src="MULTI-summary-20070501030810.mp3" class="walkie-channel-btn flex items-center justify-between py-2 px-2 border-b border-cyber-border/20 text-left hover:bg-cyber-primary/5 rounded">
+                    <span>Police Radio 5</span>
+                </button>
+                <button data-src="MULTI-summary-20070501011003.mp3" class="walkie-channel-btn flex items-center justify-between py-2 px-2 border-b border-cyber-border/20 text-left hover:bg-cyber-primary/5 rounded">
+                    <span>Police Radio 6</span>
+                </button>
+            </div>
+
+            <div class="mt-2 flex gap-2">
+                <button id="walkie-play-btn" class="flex-1 px-2 py-1 bg-cyber-primary text-black rounded text-xs font-bold">Play</button>
+                <button id="walkie-stop-btn" class="px-2 py-1 bg-transparent border border-cyber-border text-cyber-primary rounded text-xs">Stop</button>
+            </div>
+
+            <div id="walkie-status" class="mt-3 text-[11px] text-gray-400 italic">Idle</div>
+        </div>
+    </div>
+
+    <div class="h-6 bg-cyber-dim/20 border-t border-cyber-border/30 flex items-center px-3 text-[9px] text-cyber-primary/60 font-mono">
+        WALKIE SCANNER READY // SOURCE: LOCAL_AUDIO
+    </div>
+</div>
+
+<div id="cameras-window" class="fixed inset-4 md:inset-10 z-[117] bg-black/95 border border-cyber-primary hidden flex-col box-glow shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+    <div id="cameras-window-header" class="bg-cyber-dim/80 border-b border-cyber-border px-4 h-10 flex items-center justify-between cursor-move select-none">
+        <div class="flex space-x-2">
+            <button id="close-cameras-window" class="w-3 h-3 rounded-full bg-red-500 hover:brightness-125 transition-all"></button>
+            <button id="minimize-cameras-window" class="w-3 h-3 rounded-full bg-yellow-500 hover:brightness-125 transition-all"></button>
+            <button id="fullscreen-cameras-window" class="w-3 h-3 rounded-full bg-green-500 hover:brightness-125 transition-all"></button>
+        </div>
+    </div>
+    <div class="flex-1 bg-black relative flex flex-col md:flex-row">
+        <div class="flex-1 flex items-center justify-center p-2 relative">
+            <video id="camera-main-feed"
+                   src="YTDown.com_YouTube_Witson-CCTV-System-CMS-seven-7-remote-si_Media_LjfG1xWigLE_001_720p.mp4"
+                   class="w-full h-full object-contain border border-cyber-primary/40 box-glow"
+                   autoplay
+                   muted
+                   loop
+                   playsinline
+                   controls>
+            </video>
+
+            <!-- Invisible UI overlay to capture cursor/events and adapt to player size -->
+            <div id="camera-overlay" aria-hidden="true" class="absolute inset-0 pointer-events-auto"></div>
+        </div>
+        <div class="w-full md:w-48 border-t md:border-t-0 md:border-l border-cyber-border/30 bg-black/60 p-2 flex flex-col text-[10px]">
+            <div class="text-cyber-primary mb-1">CAMERA LIST</div>
+            <div class="flex flex-col gap-1">
+                <button id="cam01-btn" class="flex items-center justify-between py-1 px-2 border-b border-cyber-border/20 text-left hover:bg-cyber-primary/5 rounded">
+                    <span>CAM-01 // SERVER ROOM</span>
+                    <span class="text-green-400">ONLINE</span>
+                </button>
+                <button id="cam02-btn" class="flex items-center justify-between py-1 px-2 border-b border-cyber-border/20 text-left hover:bg-cyber-primary/5 rounded">
+                    <span>CAM-02 // PERIMETER</span>
+                    <span class="text-yellow-400">LOCAL</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="h-6 bg-cyber-dim/20 border-t border-cyber-border/30 flex items-center px-3 text-[9px] text-cyber-primary/60 font-mono">
+        FEEDS: 1 // SOURCE: LOCAL_STORAGE // MODE: READ-ONLY
+    </div>
+</div>
+
+<!-- IMAGE VIEWER WINDOW -->
+<div id="image-viewer-window" class="fixed inset-4 md:inset-8 z-[120] bg-black/95 border border-cyber-primary hidden flex-col box-glow shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+    <div id="image-window-header" class="bg-cyber-dim/80 border-b border-cyber-border px-4 h-10 flex items-center justify-between cursor-move select-none">
+        <div class="flex space-x-2">
+            <button id="close-image-window" class="w-3 h-3 rounded-full bg-red-500 hover:brightness-125 transition-all"></button>
+            <button id="minimize-image-window" class="w-3 h-3 rounded-full bg-yellow-500 hover:brightness-125 transition-all"></button>
+            <button id="fullscreen-image-window" class="w-3 h-3 rounded-full bg-green-500 hover:brightness-125 transition-all"></button>
+        </div>
+        <div id="image-viewer-title" class="text-cyber-primary font-bold text-[10px] tracking-[0.2em] uppercase">SECURE_IMAGE_VIEWER</div>
+        <div class="flex items-center space-x-2 text-[10px] text-cyber-primary/60 font-mono">
+            <span id="image-counter">0 / 0</span>
+        </div>
+    </div>
+    <div class="flex-1 bg-black flex items-center justify-center p-2 relative overflow-hidden group">
+        <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-10 pointer-events-none"></div>
+        
+        <!-- Navigation Arrows -->
+        <button id="prev-image-btn" class="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/60 border border-cyber-primary/30 text-cyber-primary hover:bg-cyber-primary hover:text-black transition-all opacity-0 group-hover:opacity-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+        </button>
+        
+        <img id="viewer-image-element" src="" class="max-w-full max-h-full object-contain drop-shadow-[0_0_20px_rgba(0,255,255,0.3)]" alt="Classified Image">
+        
+        <button id="next-image-btn" class="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-black/60 border border-cyber-primary/30 text-cyber-primary hover:bg-cyber-primary hover:text-black transition-all opacity-0 group-hover:opacity-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+        </button>
+    </div>
+    <!-- Image Footer Info -->
+    <div class="h-8 bg-cyber-dim/20 border-t border-cyber-border/30 flex items-center justify-between px-4 text-[9px] text-gray-500 font-mono italic">
+        <span id="image-filename-display">FILE: NULL</span>
+        <span>METADATA: EXIF_STRIPPED // GEO_REDACTED</span>
+    </div>
+</div>
+
+<!-- END: MainContainer -->
+<!-- ACCESS CODE MODAL -->
+<div id="access-modal" class="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center">
+    <div class="w-[92%] max-w-md bg-black/80 border border-cyber-border p-4 rounded-sm box-glow">
+        <div class="text-cyber-primary text-[10px] uppercase tracking-widest mb-2">ACCESS REQUIRED</div>
+        <div class="bg-black/60 border border-cyber-border p-3 rounded-sm mb-3">
+            <div class="flex items-center justify-between bg-[#061212] px-3 py-2 rounded">
+                <div class="text-cyber-primary text-[10px]">Enter 4-digit code</div>
+            </div>
+            <div class="mt-3">
+                <input id="access-input" autofocus placeholder="Enter code" class="w-full bg-black/80 border border-cyber-border text-white px-3 py-2 rounded text-sm outline-none" />
+            </div>
+        </div>
+        <div class="flex justify-between items-center">
+            <div class="text-gray-400 text-[11px] italic">Enter the required 4-digit code to unlock.</div>
+            <div class="flex gap-2">
+                <button id="access-submit" class="px-3 py-1 bg-cyber-primary text-black rounded text-sm font-bold">Unlock</button>
+                <button id="access-reset" class="px-3 py-1 bg-transparent border border-cyber-border text-cyber-primary rounded text-sm">Clear</button>
+            </div>
+        </div>
+        <div id="access-error" class="mt-2 text-red-500 text-[11px] hidden">Invalid code.</div>
+    </div>
+</div>
+
+<!-- WARNING / FACE-SCAN PAGE (shown after incorrect code) -->
+<div id="warning-page" class="fixed inset-0 z-[210] bg-black/95 flex items-center justify-center hidden">
+    <div class="w-[94%] max-w-3xl bg-black/85 border border-red-700 p-4 rounded-sm box-glow text-center">
+        <div class="flex flex-col items-center gap-4">
+            <img src="camera_icon.png" alt="Warning" class="w-16 h-16 drop-shadow-[0_0_12px_rgba(255,0,0,0.6)]" />
+            <div class="text-red-500 uppercase tracking-widest text-[11px] font-bold">TOP SECRET ACCESS DETECTED</div>
+            <div class="text-gray-300 text-[13px] max-w-2xl space-y-2">
+                <p>You are attempting to access top secret programs. Leave immediately or verify ownership by scanning your face.</p>
+                <div id="advanced-warning-text" class="space-y-2">
+                    <p class="font-semibold text-[12px] text-red-400">Suspicious activity detected.</p>
+                    <p>If you do not complete verification we will initiate tracking and logging of your session, IP address, and device identifiers for security review. Continued attempts may result in escalation to monitoring and reporting authorities.</p>
+                    <p class="italic">Note: Project A.X.L is strictly private and classified — access to its records is prohibited without explicit authorization under penalty of action.</p>
+                </div>
+            </div>
+
+            <div id="warning-controls" class="flex gap-3 mt-2">
+                <button id="leave-site-btn" class="px-4 py-2 bg-red-600 text-black rounded font-bold">Leave site</button>
+                <button id="start-scan-btn" class="px-4 py-2 bg-cyber-primary text-black rounded font-bold">Scan Face To Verify Ownership</button>
+            </div>
+
+            <div id="scan-area" class="w-full max-w-md mt-4 hidden">
+                <div class="bg-black/70 border border-cyber-border p-2 rounded relative">
+                    <video id="scan-video" autoplay playsinline class="w-full h-64 bg-black object-cover"></video>
+                    <canvas id="scan-canvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
+                    <div id="scan-overlay" class="absolute inset-0 flex items-center justify-center pointer-events-none"></div>
+                </div>
+                <div id="scan-status" class="text-[12px] text-gray-300 mt-2">Ready to scan.</div>
+                <div class="flex justify-center mt-3 gap-2">
+                    <button id="attempt-scan-btn" class="px-3 py-1 bg-cyber-primary text-black rounded">Start Scan</button>
+                    <button id="stop-scan-btn" class="px-3 py-1 bg-transparent border border-cyber-border text-cyber-primary rounded">Cancel</button>
+                </div>
+            </div>
+
+            <div id="scan-result" class="mt-3 text-[12px] hidden"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+<script src="script.js" defer></script>
+</body></html>
