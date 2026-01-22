@@ -424,11 +424,8 @@ function populateTerminalInfo() {
     else if (/Chrome\//.test(userAgent)) browser = 'Chrome';
     else if (/Safari\//.test(userAgent)) browser = 'Safari';
 
-    const uptimeSeconds = Math.round(performance.now() / 1000);
-    const hours = Math.floor(uptimeSeconds / 3600);
-    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
-    const seconds = uptimeSeconds % 60;
-    const uptimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
+    // Create a place for a live-updating uptime field
+    const startTime = performance.now();
 
     container.innerHTML = `
         <!-- ASCII Logo -->
@@ -463,9 +460,27 @@ function populateTerminalInfo() {
             <div class="flex"><span class="text-cyber-primary w-24">Device Memory</span><span>${memory}</span></div>
             <div class="flex"><span class="text-cyber-primary w-24">Language</span><span>${language}</span></div>
             <div class="flex"><span class="text-cyber-primary w-24">Network</span><span>${online}</span></div>
-            <div class="flex"><span class="text-cyber-primary w-24">Session Uptime</span><span>${uptimeFormatted}</span></div>
+            <div class="flex"><span class="text-cyber-primary w-24">Session Uptime</span><span id="terminal-uptime">0h 0m 0s</span></div>
         </div>
     `;
+
+    // Live uptime updater (updates every second)
+    const uptimeEl = document.getElementById('terminal-uptime');
+    if (!uptimeEl) return;
+
+    function updateUptime() {
+        const uptimeSeconds = Math.round((performance.now() - startTime) / 1000);
+        const hours = Math.floor(uptimeSeconds / 3600);
+        const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+        const seconds = uptimeSeconds % 60;
+        uptimeEl.textContent = `${hours}h ${minutes}m ${seconds}s`;
+    }
+
+    // Initialize immediately and then tick
+    updateUptime();
+    // Clear any previous interval handle to avoid duplicates
+    if (window.__AXL_uptimeInterval) clearInterval(window.__AXL_uptimeInterval);
+    window.__AXL_uptimeInterval = setInterval(updateUptime, 1000);
 }
 
 // Populate terminal info once DOM is ready
@@ -787,6 +802,10 @@ const languageSelect = document.getElementById('language-select');
 const languageStatusLabel = document.getElementById('language-status-label');
 const languagePreview = document.getElementById('language-preview');
 
+const adminsWindow = document.getElementById('admins-window');
+const adminsWindowHeader = document.getElementById('admins-window-header');
+const adminsDraggable = adminsWindowHeader ? setupDraggable(adminsWindowHeader, adminsWindow) : null;
+
 // Walkie Talkie Scanner elements
 const walkieWindow = document.getElementById('walkie-window');
 const walkieWindowHeader = document.getElementById('walkie-window-header');
@@ -969,38 +988,380 @@ function setWalkieSource(src) {
     }
 }
 
-// Hook up UI channel buttons and controls (delegated)
-function initWalkieUI() {
-    // channel buttons
-    document.querySelectorAll('.walkie-channel-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const src = btn.getAttribute('data-src');
-            if (!src) return;
-            setWalkieSource(src);
-            playWalkie();
-            // highlight selected
-            document.querySelectorAll('.walkie-channel-btn').forEach(b => b.classList.remove('bg-cyber-primary/10', 'text-white'));
-            btn.classList.add('bg-cyber-primary/10', 'text-white');
-            playClick();
-        });
-    });
+ // Hook up UI channel buttons and controls (delegated)
+ function initWalkieUI() {
+     // Define pools of possible station sources for randomization
+     const STATION_POOLS = {
+         // group by logical channel key; include available audio/mp4 assets
+         'citywide': [
+             'citywide1_20250109_200000.mp3',
+             'MULTI-summary-20061101200112.mp3',
+             'MULTI-summary-20070501200537.mp3'
+         ],
+         'police': [
+             'MULTI-summary-20070501150647.mp3',
+             'MULTI-summary-20070501060419.mp3',
+             'MULTI-summary-20070501030810.mp3',
+             'MULTI-summary-20070501011003.mp3'
+         ],
+         'mixed': [
+             'citywide1_20250109_200000.mp3',
+             'MULTI-summary-20061101200112.mp3',
+             'MULTI-summary-20070501200537.mp3',
+             'MULTI-summary-20070501150647.mp3'
+         ]
+     };
 
-    const playBtn = document.getElementById('walkie-play-btn');
-    const stopBtn = document.getElementById('walkie-stop-btn');
+     function pickRandomFromPool(pool) {
+         if (!pool || pool.length === 0) return null;
+         return pool[Math.floor(Math.random() * pool.length)];
+     }
 
-    if (playBtn) {
-        playBtn.addEventListener('click', () => {
-            playWalkie();
-            playClick();
-        });
-    }
-    if (stopBtn) {
-        stopBtn.addEventListener('click', () => {
-            stopWalkie();
-            playClick();
-        });
-    }
+     // Determine pool key heuristically from button attributes or text
+     function resolvePoolKey(btn) {
+         const attr = (btn.getAttribute('data-src') || '').toLowerCase();
+         const txt = (btn.textContent || '').toLowerCase();
+         if (attr.includes('citywide') || txt.includes('citywide')) return 'citywide';
+         if (txt.includes('police') || attr.includes('multi-summary')) return 'police';
+         return 'mixed';
+     }
+
+     // Inject wifi-loader CSS into the document for the searching animation
+     (function injectWifiLoaderStyles(){
+         if (document.getElementById('axl-wifi-loader-styles')) return;
+         const css = `
+/* wifi-loader styles (injected) */
+#wifi-loader {
+  --background: #62abff;
+  --front-color: #4f29f0;
+  --back-color: #c3c8de;
+  --text-color: #414856;
+  width: 64px;
+  height: 64px;
+  border-radius: 50px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
+
+#wifi-loader svg {
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#wifi-loader svg circle {
+  position: absolute;
+  fill: none;
+  stroke-width: 6px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: rotate(-100deg);
+  transform-origin: center;
+}
+
+#wifi-loader svg circle.back {
+  stroke: var(--back-color);
+}
+
+#wifi-loader svg circle.front {
+  stroke: var(--front-color);
+}
+
+#wifi-loader svg.circle-outer {
+  height: 86px;
+  width: 86px;
+}
+
+#wifi-loader svg.circle-outer circle {
+  stroke-dasharray: 62.75 188.25;
+}
+
+#wifi-loader svg.circle-outer circle.back {
+  animation: circle-outer135 1.8s ease infinite 0.3s;
+}
+
+#wifi-loader svg.circle-outer circle.front {
+  animation: circle-outer135 1.8s ease infinite 0.15s;
+}
+
+#wifi-loader svg.circle-middle {
+  height: 60px;
+  width: 60px;
+}
+
+#wifi-loader svg.circle-middle circle {
+  stroke-dasharray: 42.5 127.5;
+}
+
+#wifi-loader svg.circle-middle circle.back {
+  animation: circle-middle6123 1.8s ease infinite 0.25s;
+}
+
+#wifi-loader svg.circle-middle circle.front {
+  animation: circle-middle6123 1.8s ease infinite 0.1s;
+}
+
+#wifi-loader svg.circle-inner {
+  height: 34px;
+  width: 34px;
+}
+
+#wifi-loader svg.circle-inner circle {
+  stroke-dasharray: 22 66;
+}
+
+#wifi-loader svg.circle-inner circle.back {
+  animation: circle-inner162 1.8s ease infinite 0.2s;
+}
+
+#wifi-loader svg.circle-inner circle.front {
+  animation: circle-inner162 1.8s ease infinite 0.05s;
+}
+
+#wifi-loader .text {
+  position: absolute;
+  bottom: -40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-transform: lowercase;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+#wifi-loader .text::before, #wifi-loader .text::after {
+  content: attr(data-text);
+}
+
+#wifi-loader .text::before {
+  color: var(--text-color);
+}
+
+#wifi-loader .text::after {
+  color: var(--front-color);
+  animation: text-animation76 3.6s ease infinite;
+  position: absolute;
+  left: 0;
+}
+
+@keyframes circle-outer135 {
+  0% {
+    stroke-dashoffset: 25;
+  }
+
+  25% {
+    stroke-dashoffset: 0;
+  }
+
+  65% {
+    stroke-dashoffset: 301;
+  }
+
+  80% {
+    stroke-dashoffset: 276;
+  }
+
+  100% {
+    stroke-dashoffset: 276;
+  }
+}
+
+@keyframes circle-middle6123 {
+  0% {
+    stroke-dashoffset: 17;
+  }
+
+  25% {
+    stroke-dashoffset: 0;
+  }
+
+  65% {
+    stroke-dashoffset: 204;
+  }
+
+  80% {
+    stroke-dashoffset: 187;
+  }
+
+  100% {
+    stroke-dashoffset: 187;
+  }
+}
+
+@keyframes circle-inner162 {
+  0% {
+    stroke-dashoffset: 9;
+  }
+
+  25% {
+    stroke-dashoffset: 0;
+  }
+
+  65% {
+    stroke-dashoffset: 106;
+  }
+
+  80% {
+    stroke-dashoffset: 97;
+  }
+
+  100% {
+    stroke-dashoffset: 97;
+  }
+}
+
+@keyframes text-animation76 {
+  0% {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  50% {
+    clip-path: inset(0);
+  }
+
+  100% {
+    clip-path: inset(0 0 0 100%);
+  }
+}`;
+         const style = document.createElement('style');
+         style.id = 'axl-wifi-loader-styles';
+         style.textContent = css;
+         document.head.appendChild(style);
+     })();
+
+     // helper: show wifi loader overlay over the visualizer for a given duration (ms)
+     function showWifiLoaderFor(ms = 2000) {
+         if (!vizCanvas) return new Promise(resolve => resolve());
+         // ensure container (parent of canvas) is positioned
+         const container = vizCanvas.parentElement || vizCanvas;
+         // avoid duplicate loader
+         let existing = container.querySelector('#wifi-loader');
+         if (existing) existing.remove();
+
+         // Hide the visualizer canvas and place a full-size black overlay so the viz area appears solid black
+         const previousVizVisibility = vizCanvas.style.visibility || '';
+         vizCanvas.style.visibility = 'hidden';
+
+         // create a black overlay that covers the visualizer area
+         const blackOverlay = document.createElement('div');
+         blackOverlay.id = 'axl-viz-black-overlay';
+         Object.assign(blackOverlay.style, {
+             position: 'absolute',
+             inset: '0',
+             background: '#000',
+             zIndex: 9998,
+             pointerEvents: 'none'
+         });
+         // ensure container is positioned
+         container.style.position = container.style.position || 'relative';
+         container.appendChild(blackOverlay);
+
+         const wrapper = document.createElement('div');
+         wrapper.id = 'wifi-loader';
+         // absolute center overlay (above black overlay)
+         Object.assign(wrapper.style, {
+             position: 'absolute',
+             left: '50%',
+             top: '50%',
+             transform: 'translate(-50%,-30%)',
+             zIndex: 9999,
+             pointerEvents: 'none' // avoid blocking interactions
+         });
+         wrapper.innerHTML = `
+  <svg viewBox="0 0 86 86" class="circle-outer"><circle r="40" cy="43" cx="43" class="back"></circle><circle r="40" cy="43" cx="43" class="front"></circle><circle r="40" cy="43" cx="43" class="new"></circle></svg>
+  <svg viewBox="0 0 60 60" class="circle-middle"><circle r="27" cy="30" cx="30" class="back"></circle><circle r="27" cy="30" cx="30" class="front"></circle></svg>
+  <svg viewBox="0 0 34 34" class="circle-inner"><circle r="14" cy="17" cx="17" class="back"></circle><circle r="14" cy="17" cx="17" class="front"></circle></svg>
+  <div data-text="Searching" class="text"></div>
+         `;
+         // append to same offset parent as canvas so it overlays correctly
+         container.appendChild(wrapper);
+
+         return new Promise(resolve => {
+             setTimeout(() => {
+                 try {
+                     wrapper.remove();
+                 } catch (e) { /*ignore*/ }
+                 try {
+                     const bo = document.getElementById('axl-viz-black-overlay');
+                     if (bo) bo.remove();
+                 } catch (e) { /*ignore*/ }
+                 // restore viz canvas visibility
+                 vizCanvas.style.visibility = previousVizVisibility;
+                 resolve();
+             }, ms);
+         });
+     }
+
+     // channel buttons - pick a randomized source from a pool each click
+     document.querySelectorAll('.walkie-channel-btn').forEach(btn => {
+         btn.addEventListener('click', async (e) => {
+             // Prevent starting another channel while loader is active
+             if (window.__axl_wifi_loader_active) return;
+ 
+             const poolKey = resolvePoolKey(btn);
+             const pool = STATION_POOLS[poolKey] || STATION_POOLS['mixed'];
+             const src = pickRandomFromPool(pool);
+             if (!src) return;
+ 
+             // Helper to disable/enable channel buttons during loader
+             const setChannelsEnabled = (enabled) => {
+                 document.querySelectorAll('.walkie-channel-btn, #walkie-play-btn').forEach(el => {
+                     if (enabled) {
+                         el.removeAttribute('aria-disabled');
+                         el.classList.remove('opacity-50', 'pointer-events-none');
+                     } else {
+                         el.setAttribute('aria-disabled', 'true');
+                         el.classList.add('opacity-50', 'pointer-events-none');
+                     }
+                 });
+             };
+ 
+             // If this is a police channel, show the wifi-search loader for 2 seconds before playing
+             if (poolKey === 'police') {
+                 window.__axl_wifi_loader_active = true;
+                 try {
+                     setChannelsEnabled(false);
+                     // show overlay and wait 2s (ensures no other start triggers)
+                     await showWifiLoaderFor(2000);
+                 } catch (err) {
+                     // ignore loader errors
+                 } finally {
+                     window.__axl_wifi_loader_active = false;
+                     setChannelsEnabled(true);
+                 }
+             }
+ 
+             // Add a cache-busting query so repeated identical filenames still feel shuffled
+             const randomizedSrc = `${src}?r=${Math.floor(Math.random() * 1e9)}`;
+             setWalkieSource(randomizedSrc);
+             playWalkie();
+             // highlight selected
+             document.querySelectorAll('.walkie-channel-btn').forEach(b => b.classList.remove('bg-cyber-primary/10', 'text-white'));
+             btn.classList.add('bg-cyber-primary/10', 'text-white');
+             playClick();
+         });
+     });
+
+     const playBtn = document.getElementById('walkie-play-btn');
+     const stopBtn = document.getElementById('walkie-stop-btn');
+
+     if (playBtn) {
+         playBtn.addEventListener('click', () => {
+             playWalkie();
+             playClick();
+         });
+     }
+     if (stopBtn) {
+         stopBtn.addEventListener('click', () => {
+             stopWalkie();
+             playClick();
+         });
+     }
+ }
 
 // Play/stop helpers
 function playWalkie() {
@@ -1043,7 +1404,10 @@ const settingsSectionSecurity = document.getElementById('settings-section-securi
 
 const soundCheckbox = document.getElementById('setting-sound');
 const highContrastCheckbox = document.getElementById('setting-high-contrast');
+const reduceMotionCheckbox = document.getElementById('setting-reduce-motion');
 const advancedWarningsCheckbox = document.getElementById('setting-advanced-warnings');
+const requireAccessCheckbox = document.getElementById('setting-require-access');
+const autoLockSecretCheckbox = document.getElementById('setting-auto-lock-secret');
 const advancedWarningText = document.getElementById('advanced-warning-text');
 
 let clickAudioCtx = null;
@@ -1052,7 +1416,10 @@ const DEFAULT_SETTINGS = {
     language: 'en',
     sound: true,
     highContrast: false,
-    advancedWarnings: true
+    reduceMotion: false,
+    advancedWarnings: true,
+    requireAccess: true,
+    autoLockSecret: false
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
@@ -1084,12 +1451,29 @@ function applyHighContrast() {
     }
 }
 
+function applyReduceMotion() {
+    if (currentSettings.reduceMotion) {
+        document.body.classList.add('reduce-motion');
+    } else {
+        document.body.classList.remove('reduce-motion');
+    }
+}
+
 function applyAdvancedWarnings() {
     if (!advancedWarningText) return;
     if (currentSettings.advancedWarnings) {
         advancedWarningText.classList.remove('hidden');
     } else {
         advancedWarningText.classList.add('hidden');
+    }
+}
+
+function applyRequireAccess() {
+    const accessModal = document.getElementById('access-modal');
+    if (!accessModal) return;
+    if (!currentSettings.requireAccess) {
+        accessModal.classList.add('hidden');
+        accessModal.style.display = 'none';
     }
 }
 
@@ -1342,6 +1726,105 @@ document.getElementById('settings-app-trigger').addEventListener('click', () => 
     activateSettingsTab('language');
 });
 
+document.getElementById('admins-app-trigger').addEventListener('click', () => {
+    // Open Admins Only window and show an internal access prompt inside it
+    if (!adminsWindow) return;
+    adminsWindow.classList.remove('hidden');
+    adminsWindow.classList.add('flex');
+    if (adminsDraggable && typeof adminsDraggable.reset === 'function') adminsDraggable.reset();
+    playClick();
+
+    // Create or reveal an internal access panel inside the admins window (left column)
+    let internalPanel = document.getElementById('admins-internal-access');
+    const adminContentArea = document.getElementById('admin-content-area');
+
+    if (!internalPanel) {
+        internalPanel = document.createElement('div');
+        internalPanel.id = 'admins-internal-access';
+        internalPanel.className = 'border border-red-700/20 p-3 rounded mb-3 bg-black/60 text-gray-300';
+        internalPanel.innerHTML = `
+            <div class="text-red-400 text-[11px] uppercase tracking-wide mb-2">Administrative Access</div>
+            <div class="text-gray-300 text-[11px] mb-2">Enter administrator passcode to unlock the panel.</div>
+            <input id="admins-internal-input" placeholder="Enter admin code" class="w-full bg-black/80 border border-red-700 text-white px-3 py-2 rounded text-sm outline-none mb-2" />
+            <div class="flex gap-2">
+                <button id="admins-internal-unlock" class="px-3 py-1 bg-red-600 text-black rounded text-sm font-bold">Unlock</button>
+                <button id="admins-internal-clear" class="px-3 py-1 bg-transparent border border-red-700 text-red-400 rounded text-sm">Clear</button>
+            </div>
+            <div id="admins-internal-error" class="mt-2 text-red-500 text-[11px] hidden">Invalid admin code.</div>
+        `;
+        // insert at top of content area
+        if (adminContentArea) adminContentArea.prepend(internalPanel);
+    } else {
+        internalPanel.classList.remove('hidden');
+    }
+
+    // Hide actual admin sections until unlocked
+    activateAdminTab('bans'); // keep state consistent but hide sections
+    const adminSections = ['admin-section-bans','admin-section-fun','admin-section-ouradmins'];
+    adminSections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+
+    const input = document.getElementById('admins-internal-input');
+    const unlockBtn = document.getElementById('admins-internal-unlock');
+    const clearBtn = document.getElementById('admins-internal-clear');
+    const errorEl = document.getElementById('admins-internal-error');
+
+    if (input) input.value = '';
+    if (input) input.focus();
+
+    function onUnlock() {
+        const val = (input.value || '').trim();
+        // admin code now required is '1234'
+        if (val === '1234') {
+            // reveal left tab column and show only the default 'bans' tab content
+            const leftTabs = document.getElementById('admins-left-tabs');
+            if (leftTabs) leftTabs.classList.remove('hidden');
+            // ensure only 'bans' is visible initially
+            activateAdminTab('bans');
+            // remove the internal prompt
+            if (internalPanel) internalPanel.remove();
+            // log action
+            const logs = document.getElementById('admin-logs');
+            if (logs) {
+                const ts = new Date().toISOString().replace('T',' ').split('.')[0];
+                const line = document.createElement('div');
+                line.textContent = `[${ts}] Admin access granted (internal)`;
+                logs.prepend(line);
+            }
+            playClick();
+        } else {
+            if (errorEl) errorEl.classList.remove('hidden');
+            playClick();
+        }
+    }
+
+    function onClear() {
+        if (input) input.value = '';
+        if (errorEl) errorEl.classList.add('hidden');
+        if (input) input.focus();
+        playClick();
+    }
+
+    if (unlockBtn) {
+        unlockBtn.onclick = onUnlock;
+    }
+    if (clearBtn) {
+        clearBtn.onclick = onClear;
+    }
+    if (input) {
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                onUnlock();
+            } else if (e.key === 'Escape') {
+                onClear();
+            }
+        });
+    }
+});
+
 // Walkie app trigger
 document.getElementById('walkie-app-trigger').addEventListener('click', () => {
     if (!walkieWindow) return;
@@ -1436,7 +1919,9 @@ const closeActions = [
     { btn: 'close-cameras-window', win: camerasWindow, extra: () => { if (cameraMainFeed) cameraMainFeed.pause(); } },
     { btn: 'minimize-cameras-window', win: camerasWindow },
     { btn: 'close-walkie-window', win: walkieWindow, extra: () => { try { walkieAudio.pause(); walkieAudio.currentTime = 0; } catch(e){} } },
-    { btn: 'minimize-walkie-window', win: walkieWindow }
+    { btn: 'minimize-walkie-window', win: walkieWindow },
+    { btn: 'close-admins-window', win: adminsWindow },
+    { btn: 'minimize-admins-window', win: adminsWindow }
 ];
 
 closeActions.forEach(action => {
@@ -1470,6 +1955,7 @@ const TRANSLATIONS = {
         ids: 'IDS',
         walkie: 'Walkie Scanner',
         settings: 'Settings',
+        admins: 'Admins Only',
         secret_folder_label: 'Secret Government Files',
         mount_label: 'Mount /home/squared',
         used_label: 'used 46%',
@@ -1484,6 +1970,7 @@ const TRANSLATIONS = {
         ids_title: 'IDS // INTRUSION DETECTION',
         settings_title: 'SYSTEM // SETTINGS',
         walkie_title: 'WALKIE // SCANNER',
+        admins_title: 'ADMINS ONLY // RESTRICTED',
         access_required: 'ACCESS REQUIRED',
         access_enter_code: 'Enter 4-digit code',
         access_submit: 'Unlock',
@@ -1515,6 +2002,7 @@ const TRANSLATIONS = {
         ids: 'IDS',
         walkie: 'Escáner Walkie',
         settings: 'Ajustes',
+        admins: 'Solo Administradores',
         secret_folder_label: 'Archivos Secretos del Gobierno',
         mount_label: 'Montar /home/squared',
         used_label: 'usado 46%',
@@ -1529,6 +2017,7 @@ const TRANSLATIONS = {
         ids_title: 'IDS // DETECCIÓN DE INTRUSIONES',
         settings_title: 'SISTEMA // AJUSTES',
         walkie_title: 'WALKIE // ESCÁNER',
+        admins_title: 'SOLO ADMINISTRADORES // RESTRINGIDO',
         access_required: 'ACCESO REQUERIDO',
         access_enter_code: 'Ingrese código de 4 dígitos',
         access_submit: 'Desbloquear',
@@ -1573,6 +2062,7 @@ function translateUI(lang) {
         'ids-app-trigger': t.ids,
         'walkie-app-trigger': t.walkie,
         'settings-app-trigger': t.settings,
+        'admins-app-trigger': t.admins,
         'secret-folder-trigger': t.secret_folder_label
     };
     Object.keys(apps).forEach(id => {
@@ -1582,10 +2072,10 @@ function translateUI(lang) {
         if (span) span.textContent = apps[id];
     });
 
-    // Footer / mount labels
-    const mountLabel = document.querySelector('[data-purpose="lower-dashboard"] .text-cyber-primary');
+    // Footer / mount labels (target the footer area explicitly to avoid clobbering app labels)
+    const mountLabel = document.querySelector('[data-purpose="lower-dashboard"] .border-t .text-cyber-primary');
     if (mountLabel) mountLabel.textContent = t.mount_label;
-    const usedLabel = document.querySelector('[data-purpose="lower-dashboard"] .text-gray-400');
+    const usedLabel = document.querySelector('[data-purpose="lower-dashboard"] .border-t .text-gray-400');
     if (usedLabel) usedLabel.textContent = t.used_label;
 
     // PDF viewer title
@@ -1613,6 +2103,10 @@ function translateUI(lang) {
     // Walkie title
     const walkieTitle = document.querySelector('#walkie-window-header .text-cyber-primary');
     if (walkieTitle) walkieTitle.textContent = t.walkie_title;
+
+    // Admins title
+    const adminsTitle = document.querySelector('#admins-window-header .text-red-400');
+    if (adminsTitle) adminsTitle.textContent = t.admins_title;
 
     // Access modal text
     const accessTitle = document.querySelector('#access-modal .text-cyber-primary');
@@ -1714,7 +2208,9 @@ function initSettingsUI() {
     // Apply effects
     applyLanguage(currentSettings.language);
     applyHighContrast();
+    applyReduceMotion();
     applyAdvancedWarnings();
+    applyRequireAccess();
 
     // Wire up change handlers
     if (languageSelect) {
@@ -1729,6 +2225,15 @@ function initSettingsUI() {
     if (soundCheckbox) {
         soundCheckbox.addEventListener('change', () => {
             currentSettings.sound = !!soundCheckbox.checked;
+            saveSettings();
+            playClick();
+        });
+    }
+
+    if (reduceMotionCheckbox) {
+        reduceMotionCheckbox.addEventListener('change', () => {
+            currentSettings.reduceMotion = !!reduceMotionCheckbox.checked;
+            applyReduceMotion();
             saveSettings();
             playClick();
         });
@@ -1752,6 +2257,23 @@ function initSettingsUI() {
         });
     }
 
+    if (requireAccessCheckbox) {
+        requireAccessCheckbox.addEventListener('change', () => {
+            currentSettings.requireAccess = !!requireAccessCheckbox.checked;
+            applyRequireAccess();
+            saveSettings();
+            playClick();
+        });
+    }
+
+    if (autoLockSecretCheckbox) {
+        autoLockSecretCheckbox.addEventListener('change', () => {
+            currentSettings.autoLockSecret = !!autoLockSecretCheckbox.checked;
+            saveSettings();
+            playClick();
+        });
+    }
+
     if (settingsCatLanguage && settingsCatDisplay && settingsCatSecurity) {
         settingsCatLanguage.addEventListener('click', () => {
             activateSettingsTab('language');
@@ -1768,15 +2290,51 @@ function initSettingsUI() {
     }
 }
 
-// Initialize settings once DOM is ready
+/* Initialize settings once DOM is ready and wire auto‑lock behavior for secret window */
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSettingsUI);
 } else {
     initSettingsUI();
 }
 
+/* Auto-lock secret archive when the page becomes hidden or the user navigates away,
+   if the "autoLockSecret" setting is enabled. Also close secret window on unload when set. */
+function autoLockIfNeeded() {
+    try {
+        if (currentSettings && currentSettings.autoLockSecret) {
+            const secretWin = document.getElementById('secret-window');
+            if (secretWin && !secretWin.classList.contains('hidden')) {
+                secretWin.classList.add('hidden');
+                secretWin.classList.remove('flex');
+            }
+        }
+    } catch (e) { /* silent */ }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') autoLockIfNeeded();
+});
+
+window.addEventListener('blur', () => {
+    // Slight delay to avoid locking during quick context switches
+    setTimeout(() => {
+        if (document.visibilityState !== 'visible') autoLockIfNeeded();
+    }, 200);
+});
+
+window.addEventListener('beforeunload', () => {
+    // if auto-lock enabled, ensure secret window is closed
+    if (currentSettings && currentSettings.autoLockSecret) {
+        const secretWin = document.getElementById('secret-window');
+        if (secretWin) {
+            secretWin.classList.add('hidden');
+            secretWin.classList.remove('flex');
+        }
+    }
+});
+
  // Fullscreen handlers
-['fullscreen-window', 'fullscreen-pdf-window', 'fullscreen-image-window', 'fullscreen-movies-window', 'fullscreen-ids-window', 'fullscreen-settings-window', 'fullscreen-cameras-window'].forEach(id => {
+['fullscreen-window', 'fullscreen-pdf-window', 'fullscreen-image-window', 'fullscreen-movies-window', 'fullscreen-ids-window', 'fullscreen-settings-window', 'fullscreen-cameras-window', 'fullscreen-admins-window'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('click', function() {
@@ -1947,6 +2505,7 @@ function processCommand(cmd) {
         appendLogLine(`  movies   - ${document.getElementById('movies-app-trigger')?.querySelector('span')?.textContent || 'Hacked Movies'}`);
         appendLogLine(`  darkweb  - A.X.L Private Dark Web Search Engine`);
         appendLogLine(`  settings - ${document.getElementById('settings-app-trigger')?.querySelector('span')?.textContent || 'Settings'}`);
+        appendLogLine(`  admins   - ${document.getElementById('admins-app-trigger')?.querySelector('span')?.textContent || 'Admins Only'}`);
         appendLogLine('');
         appendLogLine(tterm('use_open'));
     } else if (trimmed.startsWith('open ')) {
@@ -1971,6 +2530,10 @@ function processCommand(cmd) {
             const btn = document.getElementById('settings-app-trigger');
             if (btn) btn.click();
             else appendLogLine(`${tterm('unable_open')} settings app trigger not found.`);
+        } else if (app === 'admins') {
+            const btn = document.getElementById('admins-app-trigger');
+            if (btn) btn.click();
+            else appendLogLine(`${tterm('unable_open')} admins app trigger not found.`);
         } else {
             appendLogLine(`${tterm('unknown_app')} ${app}`);
         }
@@ -2213,6 +2776,151 @@ if (document.readyState === 'loading') {
 
 })();
 
+/* Admin panel tab activation helpers */
+function activateAdminTab(tab) {
+    const tabs = {
+        bans: document.getElementById('admin-section-bans'),
+        fun: document.getElementById('admin-section-fun'),
+        ouradmins: document.getElementById('admin-section-ouradmins')
+    };
+    Object.keys(tabs).forEach(k => {
+        if (!tabs[k]) return;
+        tabs[k].classList.add('hidden');
+    });
+    if (tabs[tab]) tabs[tab].classList.remove('hidden');
+
+    // update button active styles
+    ['admin-tab-bans','admin-tab-fun','admin-tab-ouradmins'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove('bg-red-600','text-black');
+        el.classList.add('bg-black/60','text-gray-300');
+    });
+    const activeBtn = document.getElementById(`admin-tab-${tab}`);
+    if (activeBtn) {
+        activeBtn.classList.remove('bg-black/60','text-gray-300');
+        activeBtn.classList.add('bg-red-600','text-black');
+    }
+}
+
+// wire admin tab buttons if present
+function initAdminTabs() {
+    const btnBans = document.getElementById('admin-tab-bans');
+    const btnFun = document.getElementById('admin-tab-fun');
+    const btnOurAdmins = document.getElementById('admin-tab-ouradmins');
+
+    if (btnBans) btnBans.addEventListener('click', () => { activateAdminTab('bans'); playClick(); });
+    if (btnFun) btnFun.addEventListener('click', () => { activateAdminTab('fun'); playClick(); });
+    if (btnOurAdmins) btnOurAdmins.addEventListener('click', () => { activateAdminTab('ouradmins'); playClick(); });
+
+    // Announcement persistence: store announcements in localStorage so they persist across reloads
+    function loadAnnouncements() {
+        try {
+            const raw = localStorage.getItem('axl_announcements_v1');
+            if (!raw) return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+    function saveAnnouncementObj(obj) {
+        try {
+            const arr = loadAnnouncements();
+            arr.unshift(obj);
+            localStorage.setItem('axl_announcements_v1', JSON.stringify(arr));
+        } catch (e) {
+            // ignore
+        }
+    }
+    function renderAnnouncementsToLogs() {
+        const logs = document.getElementById('admin-logs');
+        if (!logs) return;
+        // ensure existing static announcements are not duplicated; clear and re-render
+        // keep the preexisting static entries at bottom by preserving any initial children that aren't our announcements
+        // For simplicity, just prepend stored announcements
+        const ann = loadAnnouncements();
+        ann.forEach(a => {
+            const line = document.createElement('div');
+            line.textContent = `[${a.ts}] ANNOUNCEMENT: ${a.text}`;
+            // avoid duplicating identical first-line
+            logs.prepend(line);
+        });
+    }
+
+    // Add "Ban user" action into the Bans section to open the external Google Form
+    (function injectBanUserButton(){
+        try {
+            const bansSection = document.getElementById('admin-section-bans');
+            if (!bansSection) return;
+            // Avoid injecting multiple times
+            if (document.getElementById('admin-ban-user-btn')) return;
+
+            const container = document.createElement('div');
+            container.className = 'mt-3 flex flex-col gap-2';
+
+            const btn = document.createElement('button');
+            btn.id = 'admin-ban-user-btn';
+            btn.className = 'px-3 py-1 bg-red-600 text-black rounded text-sm font-bold w-full';
+            btn.textContent = 'Ban user';
+
+            btn.addEventListener('click', () => {
+                // open google form in a new tab (kept as action) but place button visually under the bans content
+                const url = 'https://docs.google.com/forms/d/e/1FAIpQLSc7ZV3jGc5mAUr8-WVI_ewhYJ3vPDClYEdNcOLLByhr5wL4VQ/viewform?usp=publish-editor';
+                try {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                } catch (e) {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                }
+                playClick();
+            });
+
+            container.appendChild(btn);
+
+            // append at the end of bans section so it's "under the stuff"
+            bansSection.appendChild(container);
+        } catch (e) {
+            // silent fail
+            console.warn('Failed to inject Ban user button', e);
+        }
+    })();
+
+    // Admin "Fun" placeholder: show a Work In Progress screen instead of cursor particles
+    (function initAdminFunWIP(){
+        const area = document.getElementById('admin-cursor-area');
+        const canvas = document.getElementById('admin-cursor-canvas');
+
+        if (!area) return;
+
+        // Remove any existing canvas usage to avoid double content
+        if (canvas && canvas.parentElement) {
+            try { canvas.remove(); } catch (_) {}
+        }
+
+        // Inject a centered Work In Progress card
+        area.innerHTML = `
+            <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;">
+                <div style="text-align:center;max-width:100%;color:#cbd5da;">
+                    <div style="font-weight:700;color:#ff6666;margin-bottom:8px;letter-spacing:0.06em;">WORK IN PROGRESS</div>
+                    <div style="color:#9fbfc3;margin-bottom:12px;">This feature is under development.</div>
+                    <div style="display:inline-block;padding:6px 10px;border-radius:6px;background:linear-gradient(90deg, rgba(255,102,102,0.08), rgba(0,255,255,0.04));border:1px solid rgba(255,102,102,0.08);font-size:12px;color:#dbeff0;">
+                        Coming soon...
+                    </div>
+                </div>
+            </div>
+        `;
+    })();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initAdminTabs();
+});
+
 /* Startup Beta Notice Modal */
 (function showBetaNotice(){
     // avoid duplicate
@@ -2262,7 +2970,7 @@ if (document.readyState === 'loading') {
 
     const continueBtn = document.getElementById('beta-continue');
 
-    let counter = 5;
+    let counter = 3;
     continueBtn.textContent = `Continue (${counter})`;
 
     const countdown = setInterval(() => {
